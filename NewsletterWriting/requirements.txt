@@ -1,0 +1,6 @@
+boto3
+openai
+pydantic>=2
+pyyaml
+tqdm
+pytest

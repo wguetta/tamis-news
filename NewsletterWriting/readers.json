@@ -1,0 +1,10 @@
+[
+  {
+    "email": "reader.one@example.com",
+    "topics": ["politics_and_government", "business_and_economy", "technology"]
+  },
+  {
+    "email": "reader.two@example.com",
+    "topics": ["entertainment_and_culture"]
+  }
+]

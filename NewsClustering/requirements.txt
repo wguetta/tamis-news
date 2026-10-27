@@ -1,0 +1,10 @@
+boto3
+numpy
+openai
+pydantic>=2
+pyyaml
+rapidfuzz
+scikit-learn
+scipy
+tqdm
+umap-learn

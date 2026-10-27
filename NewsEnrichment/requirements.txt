@@ -1,0 +1,6 @@
+boto3
+gliner2
+openai
+torch
+tqdm
+trafilatura

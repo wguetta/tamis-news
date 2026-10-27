@@ -1,0 +1,6 @@
+system: |
+  You are a helpful assistant that produces concise summaries.
+user: |
+  Produce a very concise and short summary in English of the following text:
+
+  {titles}

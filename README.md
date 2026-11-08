@@ -1,89 +1,28 @@
 # tamis-news
 
-Pipeline that turns RSS feeds into clustered stories and a newsletter for each reader. The four stages run separately and pass data through Amazon S3. Step Functions starts them. That state machine is not in this repository.
+A pipeline that turns RSS feeds into a daily newsletter for each reader. Stories are collected, enriched, grouped into clusters, then written up and emailed. The stages run separately and pass their work through Amazon S3. An AWS Step Functions workflow starts them. That workflow lives outside this repository.
 
-Python 3.11 or newer.
+The pipeline runs across several EC2 instances, one for each of the later stages. Each of those stages has its own virtualenv on its instance.
 
 ## Stages
 
-1. **RSSIngestion** is an AWS Lambda. It reads `feeds.json`, keeps stories from the last 24 hours, drops articles already stored, and writes the raw dump plus the new unique articles to S3.
-2. **NewsEnrichment** runs on EC2. It loads the unique articles, extracts full text, adds topics and entities, computes embeddings, and writes the enriched articles to S3. A failed run can resume from its checkpoints.
-3. **NewsClustering** runs on EC2. It reduces embeddings with UMAP, groups stories with HDBSCAN, scores clusters using `reliability.json`, and summarizes them.
-4. **NewsletterWriting** runs on EC2. It ranks clusters for each reader in `readers.json`, drafts the newsletter, stores it in S3, and sends it.
+1. **RSSIngestion** runs hourly as an AWS Lambda. It pulls recent stories from hundreds of sources, drops articles already stored, and saves the new ones.
+2. **NewsEnrichment** runs daily on its own multi-core EC2 instance. It reads the new articles and pulls the full text. Transformer-based local NLP models extract each article's topics, entities, and vector embeddings. That work is compute-heavy, so the stage runs it in parallel across the instance's cores.
+3. **NewsClustering** runs daily on its own EC2 instance after NewsEnrichment. It reduces the dimensionality of the vector embeddings, then uses hierarchical density-based clustering to group articles into stories, scores those stories, and writes a summary for each one.
+4. **NewsletterWriting** runs daily on its own EC2 instance after NewsClustering. It picks the stories that fit each reader, drafts that reader's newsletter, saves it, and sends it.
 
-## EC2 setup
+## What the reader receives
 
-On each instance, from that stage's directory:
+Each email is a short briefing in three parts.
 
-```bash
-bash setup_env.sh
-```
+**The Big Picture** is the lead piece: one story written out in a few paragraphs.
 
-`setup_env.sh` creates the virtualenv named in `run.sh` and installs `requirements.txt`. Create a `.env` in the same directory before the first run. `run.sh` loads it and then starts `main.py`. `init_dotenv.sh` can write that file. It is gitignored because it holds live keys. Do not commit it.
+![The Big Picture section of the newsletter](Screenshots/1.png)
 
-| Stage | Virtualenv |
-| --- | --- |
-| NewsEnrichment | `/home/ec2-user/NewsEnrichmentEnv` |
-| NewsClustering | `/home/ec2-user/NewsClustering/.venv` |
-| NewsletterWriting | `/home/ec2-user/NewsletterWriting/.venv` |
+**Headlines** are three shorter items, each with a title and a brief explanation.
 
-Newsletter tests:
+![The Headlines section of the newsletter](Screenshots/2.png)
 
-```bash
-cd NewsletterWriting
-python -m pytest
-```
+**Stories to Watch** are three developments to follow, each with a note on what to look for next.
 
-## Environment variables
-
-**Lambda**
-
-| Variable | Purpose |
-| --- | --- |
-| `TAMIS_AWS_ACCESS_KEY_ID` | AWS access key |
-| `TAMIS_AWS_SECRET_ACCESS_KEY` | AWS secret key |
-| `AWS_REGION` | Region, set by Lambda |
-| `RAW_RSS_BUCKET` | Raw RSS dump |
-| `RSS_NEW_UNIQUE_ARTICLES_BUCKET` | New unique articles |
-
-`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are reserved on Lambda, so the keys use the `TAMIS_` names.
-
-**Enrichment**
-
-| Variable | Purpose |
-| --- | --- |
-| `AWS_ACCESS_KEY_ID` | AWS access key |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key |
-| `AWS_REGION` | AWS region |
-| `OPENAI_API_KEY` | Embeddings |
-| `UNIQUE_ARTICLES_BUCKET` | Input from ingestion |
-| `ENRICHED_ARTICLES_BUCKET` | Enriched articles |
-
-`LOAD_HOURS`, `MAX_WORKERS`, and `BATCH_SIZE` are optional. `run.sh` sets them for that instance.
-
-**Clustering**
-
-| Variable | Purpose |
-| --- | --- |
-| `AWS_ACCESS_KEY_ID` | AWS access key |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key |
-| `AWS_REGION` | AWS region |
-| `OPENAI_API_KEY` | Cluster summaries |
-| `ENRICHED_ARTICLES_BUCKET` | Input from enrichment |
-| `CLUSTERS_BUCKET` | Cluster output |
-| `ARTICLE_CLUSTER_IDS_BUCKET` | Article-to-cluster ids |
-
-**Newsletter writing**
-
-Clustering's variables, plus:
-
-| Variable | Purpose |
-| --- | --- |
-| `NEWSLETTERS_BUCKET` | Saved newsletters |
-| `SMTP_HOST` | SMTP server |
-| `SMTP_PORT` | SMTP port |
-| `SMTP_USERNAME` | SMTP user |
-| `SMTP_PASSWORD` | SMTP password |
-| `FROM_EMAIL` | From address |
-
-`readers.json` in this repository uses placeholder addresses. On the newsletter instance, point `EDITORIAL_READERS_PATH` at the real file, or replace `readers.json` locally and do not commit it.
+![The Stories to Watch section of the newsletter](Screenshots/3.png)

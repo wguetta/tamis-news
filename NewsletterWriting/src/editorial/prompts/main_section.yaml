@@ -6,7 +6,7 @@ plan:
     who cares primarily about {reader_topics_text}.
 
     You will receive a list of news clusters. Each cluster contains:
-    - cluster_id: a unique integer identifier
+    - cluster_id: a unique identifier; copy it exactly as given
     - summary: a concise summary of the stories contained in that cluster
 
     Your task is to organize the news into EXACTLY {n_section_plans} newsletter sections.

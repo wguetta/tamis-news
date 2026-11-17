@@ -29,7 +29,7 @@ def _plan_schema(n: int) -> dict:
                     "additionalProperties": False,
                     "properties": {
                         "section_title": {"type": "string"},
-                        "clusters": {"type": "array", "items": {"type": "integer"}},
+                        "clusters": {"type": "array", "items": {"type": "string"}},
                         "editorial_theme": {"type": "string"},
                         "questions": {"type": "string"},
                     },

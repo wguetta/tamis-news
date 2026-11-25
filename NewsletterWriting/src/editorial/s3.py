@@ -79,27 +79,21 @@ def load_articles(s3, bucket: str, job_date: str) -> tuple[list[dict], dict]:
 
 
 def attach_cluster_ids(articles: list[dict], clusters: list[dict], assignments: list[dict]) -> None:
-    """Join hashed article↔cluster rows onto articles."""
-    id_to_hashed = {}
+    """Copy each assignment's dated cluster id onto the matching article."""
+    del clusters
+    by_article = {}
     for row in assignments:
         article_id = row["article_id"]
-        id_to_hashed[article_id] = row["cluster_id"]
-        id_to_hashed[str(article_id)] = row["cluster_id"]
-
-    hashed_to_int = {
-        cluster["hashed_cluster_id"]: cluster["cluster_id"]
-        for cluster in clusters
-        if cluster.get("hashed_cluster_id") is not None and "cluster_id" in cluster
-    }
+        by_article[article_id] = row["cluster_id"]
+        by_article[str(article_id)] = row["cluster_id"]
 
     for article in articles:
         article_id = article.get("id", article.get("article_id"))
-        hashed = id_to_hashed.get(article_id)
-        if hashed is None and article_id is not None:
-            hashed = id_to_hashed.get(str(article_id))
-        article["hashed_cluster_id"] = hashed
-        if hashed in hashed_to_int:
-            article["cluster_id"] = hashed_to_int[hashed]
+        cluster_id = by_article.get(article_id)
+        if cluster_id is None and article_id is not None:
+            cluster_id = by_article.get(str(article_id))
+        if cluster_id is not None:
+            article["cluster_id"] = cluster_id
 
 
 def load_persisted(config: EditorialConfig | None = None, s3=None) -> dict:

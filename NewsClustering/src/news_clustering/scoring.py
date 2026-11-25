@@ -80,6 +80,28 @@ def fuzzy_jaccard(set_a, set_b, threshold=85):
     return len(matched_a) / union if union else 0.0
 
 
+def _share_map(labels_per_article: list[list[str]]) -> dict[str, float]:
+    """Map each label to the fraction of articles that contain it."""
+    n = len(labels_per_article)
+    if not n:
+        return {}
+    counts: Counter[str] = Counter()
+    for labels in labels_per_article:
+        counts.update({str(label).strip() for label in labels if str(label).strip()})
+    ordered = sorted(counts, key=lambda name: (-counts[name], name))
+    return {name: round(counts[name] / n, 4) for name in ordered}
+
+
+def cluster_topic_stats(articles: list[dict]) -> dict[str, float]:
+    return _share_map([article.get("topics") or [] for article in articles])
+
+
+def cluster_entity_stats(articles: list[dict]) -> dict[str, float]:
+    return _share_map(
+        [flatten_entities(article.get("entities") or {}) for article in articles]
+    )
+
+
 def entity_consistency(articles: list[dict], threshold=85) -> float:
     sets = [flatten_entities(article.get("entities", {})) for article in articles]
     scores = [
@@ -93,18 +115,24 @@ def entity_consistency(articles: list[dict], threshold=85) -> float:
 def score_clusters(articles, embeddings, labels, config: NewsClusteringConfig) -> list[dict]:
     reliabilities = config.load_reliabilities()
     grouped = defaultdict(list)
-    for article in articles:
+    hdbscan_label = {}
+    for article, label in zip(articles, labels):
+        label = int(label)
+        if label < 0:
+            continue
         cluster_id = article.get("cluster_id")
-        if cluster_id is not None and cluster_id >= 0:
-            grouped[cluster_id].append(article)
+        grouped[cluster_id].append(article)
+        hdbscan_label[cluster_id] = label
 
     clusters = []
-    for cluster_id, members in sorted(grouped.items()):
+    for cluster_id, members in sorted(grouped.items(), key=lambda item: hdbscan_label[item[0]]):
         topics = [article.get("topics") or [] for article in members]
         cluster = {
             "cluster_id": cluster_id,
             "cluster_size": len(members),
-            "cluster_density": cluster_density(embeddings, labels, cluster_id, config.density_k),
+            "cluster_density": cluster_density(
+                embeddings, labels, hdbscan_label[cluster_id], config.density_k
+            ),
             "membership_probability": float(
                 np.mean([article.get("cluster_proba") or 0 for article in members])
             ),
@@ -116,6 +144,8 @@ def score_clusters(articles, embeddings, labels, config: NewsClusteringConfig) -
             "topic_consistency": topic_consistency(topics),
             "majority_topic_consistency": majority_topic_consistency(topics),
             "entity_consistency": entity_consistency(members, config.fuzzy_entity_threshold),
+            "cluster_topics": cluster_topic_stats(members),
+            "cluster_entities": cluster_entity_stats(members),
             "summary": "",
         }
         cluster["consistency_score"] = (

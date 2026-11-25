@@ -4,13 +4,12 @@ import logging
 import time
 from typing import Optional
 
-from news_clustering.clustering import cluster_articles
+from news_clustering.clustering import cluster_articles, is_noise_cluster_id
 from news_clustering.config import NewsClusteringConfig
 from news_clustering.llm import LlmClient
 from news_clustering.prompts import load_prompts, render
 from news_clustering.s3 import (
     article_cluster_rows,
-    hashed_cluster_id,
     load_articles,
     load_manifest,
     load_ranked_checkpoint,
@@ -59,13 +58,13 @@ def _titles_from_previews(previews: list[dict]) -> str:
 
 def attach_member_previews(clusters: list[dict], articles: list[dict]) -> None:
     by_id = {}
-    by_cluster: dict[int, list[dict]] = {}
+    by_cluster: dict[int | str, list[dict]] = {}
     for article in articles:
         article_id = _article_id(article)
         if article_id is not None:
             by_id[article_id] = article
         cluster_id = article.get("cluster_id")
-        if cluster_id is None or cluster_id < 0:
+        if cluster_id is None or is_noise_cluster_id(cluster_id):
             continue
         by_cluster.setdefault(cluster_id, []).append(article)
     for cluster in clusters:
@@ -96,16 +95,13 @@ def _cluster_titles(cluster: dict) -> str:
 
 
 def _summarize_cluster(
-    llm: LlmClient, cluster: dict, prompts: dict, config: NewsClusteringConfig, job_date: str
+    llm: LlmClient, cluster: dict, prompts: dict, config: NewsClusteringConfig
 ) -> None:
     cluster["summary"] = llm.complete(
         instructions=prompts["system"],
         user=render(prompts["user"], {"titles": _cluster_titles(cluster)}),
         model=config.summarize_model,
     ).strip()
-    cluster["hashed_cluster_id"] = hashed_cluster_id(
-        job_date, cluster["cluster_id"], cluster["summary"]
-    )
 
 
 def cheap_summarize(
@@ -118,7 +114,7 @@ def cheap_summarize(
         still_pending = []
         for cluster in pending:
             try:
-                _summarize_cluster(llm, cluster, prompts, config, job_date)
+                _summarize_cluster(llm, cluster, prompts, config)
             except Exception as exc:
                 still_pending.append(cluster)
                 logger.warning(
@@ -211,7 +207,7 @@ def prepare_clusters(config: Optional[NewsClusteringConfig] = None, llm: Optiona
             manifest["noise_article_ids"] = [
                 article["id"]
                 for article in articles
-                if article.get("cluster_id") == -1 and article.get("id") is not None
+                if is_noise_cluster_id(article.get("cluster_id")) and article.get("id") is not None
             ]
             checkpoint_key = save_ranked_checkpoint(
                 s3, config.output_s3_bucket, job_date, ranked_clusters
@@ -258,7 +254,6 @@ def prepare_clusters(config: Optional[NewsClusteringConfig] = None, llm: Optiona
                     "key": key,
                     "article_cluster_ids_key": article_key,
                     "cluster_ids": [cluster["cluster_id"] for cluster in batch],
-                    "hashed_cluster_ids": [cluster["hashed_cluster_id"] for cluster in batch],
                     "cluster_count": len(batch),
                     "summarized": summary_stats["summarized"],
                     "failed_summaries": 0,

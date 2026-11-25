@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import re
@@ -11,6 +10,7 @@ from typing import List, Optional, Tuple
 import boto3
 from botocore.exceptions import ClientError
 
+from news_clustering.clustering import format_cluster_id, is_noise_cluster_id
 from news_clustering.config import NewsClusteringConfig
 
 logger = logging.getLogger(__name__)
@@ -48,42 +48,36 @@ def noise_key(job_date: str) -> str:
     return f"date={job_date}/noise.jsonl"
 
 
-def hashed_cluster_id(job_date: str, cluster_id, summary: str) -> str:
-    stuff_to_hash = f"{job_date}{cluster_id}{summary}"
-    return hashlib.sha256(stuff_to_hash.encode()).hexdigest()
-
-
 def article_cluster_rows(articles: list[dict], clusters: list[dict]) -> list[dict]:
     rows = []
     for cluster in clusters:
-        hashed = cluster.get("hashed_cluster_id")
-        if not hashed:
+        cluster_id = cluster.get("cluster_id")
+        if not cluster_id:
             continue
         article_ids = cluster.get("article_ids") or []
         if article_ids:
             for article_id in article_ids:
                 if article_id is not None:
-                    rows.append({"article_id": article_id, "cluster_id": hashed})
+                    rows.append({"article_id": article_id, "cluster_id": cluster_id})
             continue
-        wanted = cluster["cluster_id"]
         for article in articles:
-            if article.get("cluster_id") != wanted:
+            if article.get("cluster_id") != cluster_id:
                 continue
             article_id = article.get("id", article.get("article_id"))
             if article_id is not None:
-                rows.append({"article_id": article_id, "cluster_id": hashed})
+                rows.append({"article_id": article_id, "cluster_id": cluster_id})
     return rows
 
 
 def noise_article_rows(articles: list[dict], job_date: str, noise_article_ids=None) -> list[dict]:
-    hashed = hashed_cluster_id(job_date, -1, "")
+    noise_id = format_cluster_id(job_date, -1)
     if noise_article_ids is not None:
         wanted = set(noise_article_ids)
         selected = [article for article in articles if article.get("id") in wanted]
     else:
-        selected = [article for article in articles if article.get("cluster_id") == -1]
+        selected = [article for article in articles if is_noise_cluster_id(article.get("cluster_id"))]
     return [
-        {"article_id": article["id"], "cluster_id": hashed}
+        {"article_id": article["id"], "cluster_id": noise_id}
         for article in selected
         if article.get("id") is not None
     ]

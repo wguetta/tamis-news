@@ -4,7 +4,6 @@ from editorial.config import EditorialConfig
 from editorial.headlines import generate_headlines
 from editorial.llm import LlmClient
 from editorial.main_section import write_main_section
-from editorial.prompts import attach_hashed_cluster_ids
 from editorial.ranking import top_clusters_for_reader
 from editorial.s3 import save_newsletters
 from editorial.stories import generate_stories_to_watch
@@ -43,7 +42,6 @@ def write_for_reader(
         "candidate_headlines": candidate_headlines,
         "candidate_stories_to_watch": candidate_stories_to_watch,
     }
-    attach_hashed_cluster_ids(newsletter, reader_clusters)
     return newsletter
 
 

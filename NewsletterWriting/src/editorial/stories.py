@@ -25,7 +25,7 @@ def _plan_schema() -> dict:
                     "type": "object",
                     "additionalProperties": False,
                     "properties": {
-                        "cluster_id": {"type": "integer"},
+                        "cluster_id": {"type": "string"},
                         "headline": {"type": "string"},
                         "watch_for": {"type": "string"},
                         "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
@@ -68,7 +68,7 @@ def _write_schema(k: int) -> dict:
                     "type": "object",
                     "additionalProperties": False,
                     "properties": {
-                        "cluster_id": {"type": "integer"},
+                        "cluster_id": {"type": "string"},
                         "headline": {"type": "string"},
                         "watch_for": {"type": "string"},
                         "confidence": {"type": "string"},

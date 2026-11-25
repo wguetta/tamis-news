@@ -1,5 +1,11 @@
 .env
 init_dotenv.sh
+NewsEnrichment/.env
+NewsEnrichment/init_dotenv.sh
+NewsClustering/.env
+NewsClustering/init_dotenv.sh
+NewsletterWriting/.env
+NewsletterWriting/init_dotenv.sh
 
 logs/
 *.log
@@ -26,3 +32,7 @@ ENV/
 dist/
 build/
 .ipynb_checkpoints/
+TestNotebooks/**
+*.ipynb
+
+/requirements.txt

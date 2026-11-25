@@ -344,7 +344,7 @@ def remove_duplicates(articles):
 def generate_unique_ids(articles): 
 
     for article in articles:
-        article["id"] = hashlib.sha256(article["title"].encode()).hexdigest()
+        article["id"] = "article-" + hashlib.sha256(article["title"].encode()).hexdigest()
 
     return articles
     
